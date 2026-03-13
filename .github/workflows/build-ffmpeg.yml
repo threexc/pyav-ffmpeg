@@ -28,22 +28,6 @@ jobs:
           - os: macos-15-intel
             arch: x86_64
             shell: bash
-          - os: ubuntu-24.04-arm
-            arch: aarch64
-            shell: bash
-          - os: ubuntu-24.04
-            arch: x86_64
-            shell: bash
-          - os: windows-latest
-            arch: x86_64
-            shell: 'msys2 {0}'
-            msys_prefix: mingw-w64-x86_64
-            msys_system: MINGW64
-          - os: windows-11-arm
-            arch: arm64
-            shell: 'msys2 {0}'
-            msys_prefix: mingw-w64-clang-aarch64
-            msys_system: CLANGARM64
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -97,47 +81,9 @@ jobs:
           name: output-${{ matrix.os }}
           path: output/
 
-  cross-build:
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        build: [ "manylinux_", "musllinux_" ]
-        # arch: [ "loongarch64", "ppc64le", "riscv64", "s390x" ]
-        arch: [ "ppc64le" ]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-      - uses: docker/setup-qemu-action@v3
-      - name: Build FFmpeg
-        env:
-          CIBW_ARCHS: ${{ matrix.arch }}
-          CIBW_BEFORE_ALL_LINUX: ./scripts/install-static-clang.sh
-          CIBW_BEFORE_BUILD_LINUX: python scripts/build-ffmpeg.py /tmp/vendor
-          CIBW_BUILD: cp311-${{ matrix.build }}${{ matrix.arch }}
-          CIBW_ENVIRONMENT_LINUX: >
-            CC="/opt/clang/bin/clang"
-            CXX="/opt/clang/bin/clang++"
-            LDFLAGS="-fuse-ld=lld"
-          CIBW_ENVIRONMENT_PASS_LINUX: RUNNER_ARCH
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: LD_LIBRARY_PATH=/tmp/vendor/lib:$LD_LIBRARY_PATH auditwheel repair --exclude libmvec.so.1 --exclude libmvec-2.so --exclude libmvec.so --exclude libmvec -w {dest_dir} {wheel}
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair --add-path C:\cibw\vendor\bin -w {dest_dir} {wheel}
-          CIBW_TEST_COMMAND: python -c "import dummy"
-        run: |
-          pip install cibuildwheel delvewheel
-          cibuildwheel --output-dir output
-          rm -f output/*.whl
-      - name: Upload FFmpeg
-        uses: actions/upload-artifact@v6
-        with:
-          name: output-${{ matrix.build }}${{ matrix.arch }}
-          path: output/
-
   upload-release:
     if: github.event_name == 'release'
-    needs: [build, cross-build]
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
